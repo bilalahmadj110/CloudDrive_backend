@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+
+    <div id="newForm" class="columns is-centered is-hidden">
+        <div class="column is-half-widescreen is-two-thirds-desktop">
+            <div class="card">
+                <header class="card-header">
+                    <p class="card-header-title">
+                        Enter your credentials
+                    </p>
+                </header>
+                <div class="card-content">
+                    {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                    <div class="notification is-danger">
+                        {{ messages.pop() }}
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                    {% if first_time %}
+                    <div class="notification is-success">
+                        Your account has been created!
+                        Please login to access your account.
+                    </div>
+                    {% endif %}
+                    <form method="POST" action="/login">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <div class="field">
+                            <div class="control has-icons-left">
+                                <input class="input is-large" autocomplete="on" type="email" name="email"
+                                    placeholder="Your Email" autofocus="" value="{{ email }}">
+                                <span class="icon is-small is-left">
+                                    <i class="mdi mdi-at"></i>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <div class="control has-icons-left">
+                                <input class="input is-large" autocomplete="current-password" type="password"
+                                    name="password" placeholder="Your Password">
+                                <span class="icon is-small is-left">
+                                    <i class="mdi mdi-key-outline"></i>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="checkbox">
+                                <input type="checkbox">
+                                Remember me
+                            </label>
+                        </div>
+                        <div class="level">
+                            <div class="level-left">
+                                <button id="chooseAccount" class="button level-item is-normal" type="button"
+                                    onclick="onAnotherUser()">
+                                    <span class="icon is-medium">
+                                        <i class="mdi mdi-account-multiple-outline"></i>
+                                    </span>
+                                    <span>Choose account</span>
+                                </button>
+                            </div>
+                            <div class="level-right">
+                                <button class="button is-normal level-item is-info">
+                                    <span class="icon is-medium">
+                                        <i class="mdi mdi-login-variant"></i>
+                                    </span>
+                                    <span>Login</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="returningForm" class="columns is-centered is-hidden">
+        <div class="column is-half-widescreen is-two-thirds-desktop">
+            <div class="card">
+                <header class="card-header">
+                    <p class="card-header-title">
+                        Choose an account
+                    </p>
+                </header>
+                <div class="card-content">
+                    <div id="userGroup" class="container mb-6">
+                        <!-- things will be inserted here -->
+                    </div>
+                    <div class="buttons is-left">
+                        <button class="button is-normal" onclick="onAnotherUser()">
+                            <span class="icon is-medium">
+                                <i class="mdi mdi-account-plus-outline"></i>
+                            </span>
+                            <span>Another account</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    accounts = window.localStorage.getItem("accounts")
+    if (accounts) {
+        let accs = JSON.parse(accounts);
+        // accs in an object of emails and usernames
+        Object.entries(accs).forEach(user => {
+            let email = user[0];
+            let username = user[1];
+            $("#userGroup").prepend(`
+                <div class="field has-addons is-fullwidth">
+                    <div class="control">
+                        <button class="button is-large is-static">
+                            <span class="icon is-large"><i class="mdi mdi-48px mdi-at"></i></span>
+                        </button>
+                    </div>
+                    <div class="control is-expanded">
+                        <button onclick="onSwitchUser(this)" class="is-large button is-fullwidth">${email}</button>
+                    </div>
+                </div>`)
+        });
+        {% if first_time or prompt %}
+        $("#newForm").toggleClass("is-hidden");
+        {% else %}
+        $("#returningForm").toggleClass("is-hidden");
+        {% endif %}
+    } else {
+        $("#chooseAccount").prop("disabled", true)
+        $("#newForm").toggleClass("is-hidden");
+    }
+    function onAnotherUser() {
+        $("#returningForm").toggleClass("is-hidden");
+        $("#newForm").toggleClass("is-hidden");
+    }
+    function onSwitchUser(event) {
+        let email = $(event)[0].innerText;
+        $("input[type='email']")[0].value = email;
+        onAnotherUser();
+        $("input[type='password']")[0].select();
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="columns is-centered">
+
+        <div class="content column is-half-widescreen is-two-thirds-desktop">
+            <p class="title">
+                {{ current_user.name.title() }}
+            </p>
+            <p class="subtitle">
+                {{ current_user.email }}
+            </p>
+            <span class="tag is-danger">
+                Member Since {{ current_user.regdate }}
+            </span>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

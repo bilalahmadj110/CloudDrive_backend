@@ -1,0 +1,362 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <!-- <div class="columns"> -->
+    <!-- <div class="column"> -->
+
+    <nav class="breadcrumb is-medium" aria-label="breadcrumbs">
+        <ul>
+            {% for crum in breadcrumb %}
+            <li><a href="{{ crum.link }}">{{ crum.name }}</a></li>
+            {% endfor %}
+            <li class="is-active has-text-primary has-text-weight-bold"><a href="#"
+                    aria-current="page">{{ directory }}</a></li>
+        </ul>
+    </nav>
+
+    <div class="field has-addons">
+        <div class="buttons">
+            <p class="control">
+                <button id="newFolder" class="button">
+                    <span class="icon is-medium">
+                        <i class="mdi mdi-folder-plus-outline"></i>
+                    </span>
+                    <span>New Folder</span>
+                </button>
+            </p>
+            <p class="control">
+                <button id="deleteFiles" class="button" disabled>
+                    <span class="icon is-normal">
+                        <i class="mdi mdi-trash-can-outline"></i>
+                    </span>
+                    <span>Delete</span>
+                </button>
+            </p>
+            <p class="control">
+                <button id="uploadFiles" class="button">
+                    <span class="icon is-medium">
+                        <i class="mdi mdi-file-upload-outline"></i>
+                    </span>
+                    <span>Upload</span>
+                </button>
+            </p>
+            <p class="control">
+                <button id="downloadFiles" class="button" disabled>
+                    <span class="icon is-medium">
+                        <i class="mdi mdi-file-download-outline"></i>
+                    </span>
+                    <span>Download</span>
+                </button>
+            </p>
+        </div>
+    </div>
+
+    <table class="datatable table is-narrow is-hoverable is-fullwidth">
+        <thead>
+            <tr>
+                <th class="dt-center is-narrow">
+                    <input type="checkbox">
+                </th>
+                {% for col in ['Name', 'Size', 'Created', 'Type'] %}
+                <th>{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in table %}
+            <tr>
+
+                <td class="dt-center is-narrow">
+                    <input type="checkbox" data-path="{{ row.path }}">
+                </td>
+                <td>
+                    <a href="{{ row.link }}">
+                        <span class="icon-text">
+                            <span class="icon">
+                                <span class="mdi mdi-{{ row.icon }}"></span>
+                            </span>
+                            <span
+                                class="{{ 'has-text-weight-semibold' if row.type=='DIR' else ''}}">{{ row.name }}</span>
+                        </span>
+                    </a>
+                </td>
+                <td class="is-narrow">{{ row.size }}</td>
+                <td class="is-narrow">{{ row.cdate }}</td>
+                <td class="is-narrow">{{ row.type }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- </div> -->
+    <!-- </div> -->
+</div>
+<!-- MODALS -->
+
+<div id="uploadModal" class="modal is-narrow">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <form class="form-root" action="/" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            <input class="filepond" type="file" name="filepond">
+        </form>
+    </div>
+    <button class="modal-close is-large" aria-label="close"></button>
+</div>
+
+<div id="newFolderModal" class="modal is-narrow">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <form method="POST" action="/mkdir/{{ locale }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+            <div class="field has-addons">
+                <div class="control has-icons-left is-expanded">
+                    <input class="input is-large" type="text" name="directory" value="new_directory" autofocus="">
+                    <span class="icon is-small is-left">
+                        <i class="mdi mdi-folder-plus-outline"></i>
+                    </span>
+                </div>
+                <div class="control">
+                    <button class="button is-large is-info">
+                        Create
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <button class="modal-close is-large" aria-label="close"></button>
+</div>
+
+<div id="deleteModal" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-content">
+        <div class="box">
+            <div class="level">
+                <div class="level-left">
+                    <span class="level-item icon is-large has-text-danger">
+                        <i class="mdi mdi mdi-48px mdi-delete-sweep-outline"></i>
+                    </span>
+                    <span class="level-item">Are you sure you want to remove these?</span>
+                </div>
+                <div class="level-right buttons">
+                    <button class="button level-item yes is-danger">Yes</button>
+                    <button class="button level-item no is-light">No</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <button class="modal-close is-large" aria-label="close"></button>
+</div>
+
+<!-- SCRIPTS AND STYLES -->
+
+<script src="https://unpkg.com/filepond/dist/filepond.js"></script>
+<script type="text/javascript" src="/static/datatables.min.js"></script>
+<script type="text/javascript" src="/static/jquery.dataTables.min.js"></script>
+<script type="text/javascript" src="/static/dataTables.bulma.min.js"></script>
+<script type="text/javascript" src="/static/file-size.js"></script>
+<script>
+    $(document).ready(function () {
+        $('.datatable').dataTable({
+            language: {
+                buttons: {
+                    selectAll: "Select all items",
+                    selectNone: "Select none"
+                }
+            },
+            columnDefs: [
+                { orderable: false, targets: 0 },
+                { type: "file-size", targets: 2 },
+                { className: 'dt-body-right is-family-monospace', targets: [2, 4] },
+                // { className: 'has-text-weight-semibold', targets: 1 },
+            ],
+            "order": [[4, 'des'], [1, 'asc']]
+        });
+
+        // Turn input element into a pond with configuration options
+        FilePond.create($('.filepond')[0]);
+        FilePond.setOptions({
+            allowMultiple: true,
+            server: {
+                fetch: null,
+                revert: null,
+                process: {
+                    url: '/upload/{{ locale }}',
+                    headers: { 'X-CSRF-TOKEN': $('input[name="csrf_token"]').val() },
+                    // onload: r=>window.location.reload(),
+                },
+            }
+        });
+        $('.datatable th').removeClass('is-family-monospace');
+        // $(".filepond--root").addClass("box");
+
+        $(".dataTables_wrapper").addClass("box");
+
+    });
+
+    $("#newFolder").click(function () {
+        // Toggle the "is-active" class on modal
+        $("#newFolderModal").toggleClass("is-active");
+        $("#newFolderModal input[type='text']")[0].select();
+    });
+
+    $("#uploadFiles").click(function () {
+        // Toggle the "is-active" class on modal
+        $("#uploadModal").toggleClass("is-active");
+    });
+
+    $("#deleteFiles").click(function () {
+        // Toggle the "is-active" class on modal
+        $("#deleteModal").toggleClass("is-active");
+    });
+
+    $("#downloadFiles").click(function (e) {
+        e.preventDefault();
+        var parent = this;
+        this.fileList = new Array;
+        $(".datatable tbody input[type='checkbox'").each(function (index) {
+            if (this.checked) {
+                parent.fileList.push(this.dataset.path);
+            }
+        });
+        console.log(parent.fileList);
+
+        // dowload file via POST request
+        // $.ajax({
+        //     type: "POST",
+        //     url: "/download/{{ locale }}",
+        //     data: {
+        //         files: fileList,
+        //         _token: $('input[name="csrf_token"]').val()
+        //     },
+        //     success: function (data) {
+        //         console.log(data);
+        //         window.location.href = data;
+        //     }
+        // });
+
+        // iterate through fileList and download each file
+        for (let i = 0; i < parent.fileList.length; i++) {
+            // fileList[i]
+            encoded = encodeURIComponent(parent.fileList[i]);
+            // String template
+            let url = `/explorer/${encoded}?attach=true`;
+
+            var delayInMilliseconds = 100; //1 second
+
+            setTimeout(function() {
+                window.open(url, '_blank');
+            }, delayInMilliseconds);
+        }
+    });
+    
+
+    $("#deleteModal .yes").click(function () {
+        $(this).toggleClass("is-loading")
+        var parent = this;
+        this.fileList = new Array;
+        $(".datatable tbody input[type='checkbox'").each(function (index) {
+            if (this.checked) {
+                parent.fileList.push(this.dataset.path);
+            }
+        });
+        fetch("/delete", {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                "X-CSRF-Token": "{{ csrf_token() }}"
+            },
+            body: JSON.stringify(parent.fileList),
+            redirect: "follow"
+        })
+            .then(response => {
+                // close the modal
+                if (response.ok) {
+                    $("#deleteModal").toggleClass("is-active");
+                    // window.location.href = response.url;
+                    location.reload();
+                }
+                $(this).toggleClass("is-loading");
+            });
+        return false;
+    });
+
+    $("#deleteModal .no").click(function () {
+        $("#deleteModal").toggleClass("is-active");
+    });
+
+    $(".modal button.modal-close, .modal-background").click(function () {
+        // Toggle the "is-active" class on modal
+        $(this).parent().toggleClass("is-active");
+    });
+
+
+    document.addEventListener('FilePond:processfiles', (e) => {
+        window.location.reload();
+    });
+
+    var csrf_token = "{{ csrf_token() }}";
+
+    document.title = "{{ directory }}";
+
+
+    $(".datatable thead input[type='checkbox']").change(function () {
+        var csels = $(".datatable tbody input[type='checkbox']");
+        if (this.checked) {
+            csels.parent().parent().addClass('is-selected');
+            csels.prop('checked', true);
+        } else {
+            csels.parent().parent().removeClass('is-selected');
+            csels.prop('checked', false);
+        }
+    });
+
+    // select row when checkbox is checked
+    $(".datatable tbody input[type='checkbox']").change(function () {
+        this.parentElement.parentElement.classList.toggle('is-selected')
+        if (!this.checked) {
+            $(".datatable thead input[type='checkbox']").prop("checked", false)
+        }
+    });
+
+    // periodically check for selections to toggle buttons
+    $(".datatable input[type='checkbox']").change(function () {
+        // function checkRowSelection() {
+        this.buttonsEnable = false
+        var parent = this;
+        $(".datatable tbody input[type='checkbox']").each(function (index) {
+            if (this.checked) {
+                $('#deleteFiles').prop("disabled", false);
+                $('#downloadFiles').prop("disabled", false);
+                parent.buttonsEnable = true;
+                return false;
+            }
+        });
+        if (!this.buttonsEnable) {
+            $('#deleteFiles').prop("disabled", true);
+            $('#downloadFiles').prop("disabled", true);
+        }
+    });
+    // setInterval(checkRowSelection, 250);
+
+</script>
+<style>
+    td {
+        overflow: auto;
+        word-wrap: break-word;
+        vertical-align: middle;
+    }
+
+    table.dataTable tbody td {
+        vertical-align: middle;
+    }
+
+    .tag:not(body).is-delete {
+        display: block;
+    }
+</style>
+
+{% endblock %}
