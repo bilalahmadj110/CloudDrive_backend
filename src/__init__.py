@@ -92,7 +92,8 @@ def create_app():
             user = User.query.filter_by(email=email).first()
             if not user:
                 return jsonify({"message": "user doesn't exists"}), 401
-            if not user.token == token:
+            print (eval(user.token), token)
+            if token not in eval(user.token):
                 return jsonify({"message": "Invalid Token"}), 401    
             return func(*args, **kwargs)
         wrapper.__name__ = func.__name__
@@ -155,7 +156,12 @@ def create_app():
             return jsonify({"message": "Please check your login details and try again."}), 401
         if not (root := pathlib.Path(user.directory)).exists():
             root.mkdir()
-        user.token = secrets.token_urlsafe(100)
+        # push token as a list
+        random_token = secrets.token_urlsafe(16)
+        if not user.token:
+            user.token = str([random_token])
+        else:
+            user.token = str(eval(user.token) + [random_token])
         regData = user.regdate
         node = validate_node(None, (root := user.directory), True)
         print (node, root)
@@ -166,7 +172,7 @@ def create_app():
         
         # format regData
         regData = regData.strftime("%Y/%m/%d")
-        return jsonify({"message": "Login successful", "token": user.token, 
+        return jsonify({"message": "Login successful", "token": random_token, 
                         "name": user.name, "email": user.email, "regdate": regData, "node": list_dir}), 200
 
         
