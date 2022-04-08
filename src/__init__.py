@@ -263,6 +263,30 @@ def create_app():
             ret["message"] = "Success"
             return jsonify(ret), 200
         
+    @app.route("/android/api/change_password", methods=["GET"])
+    @csrf.exempt
+    @auth_required_api
+    def change_password():
+        print ("Changing password...")
+        new_password = request.headers.get("new")
+        password = request.headers.get("password")
+        email = request.headers.get("email")
+        user = User.query.filter_by(email=email).first()
+        
+        # check if password is correct
+        if not check_password_hash(user.password, password):
+            return jsonify({"message": "Wrong old password"}), 401
+        try:
+            user.password = generate_password_hash(new_password, method="sha256")
+            print (user.password )
+            # update the database
+            db.session.commit()
+            return jsonify({"message": "Success"}), 200
+        except Exception as e:
+            print (e)
+            return jsonify({"message": "Error"}), 400
+            
+        
     @app.route("/android/api/mkdir/<path:node>")
     @app.route("/android/api/mkdir/", defaults={"node": None})
     @csrf.exempt
