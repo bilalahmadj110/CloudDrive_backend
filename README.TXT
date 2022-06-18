@@ -67,4 +67,4 @@ ________________________________________________________________________________
 4. Access your server from another computer or network. You may have to 
 	configure port-forwarding (port:80) in your router.
 
-		http://XXX.XXX.XXX.XXX
+		http://?????????????????
