@@ -48,7 +48,6 @@ class Helper():
             cdate = datetime.utcfromtimestamp(stat.st_ctime).strftime(
                 "%Y/%m/%d %H:%M:%S"
             )
-            print(this.name, path, link, icon, size, type_, cdate)
             dir_dict = {"name" : this.name, "path" : path, "link" : link, "icon" : icon, "size" : size, "type" : type_, "cdate" : cdate}
             l.append(dir_dict)
         return l

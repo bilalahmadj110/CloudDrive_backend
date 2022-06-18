@@ -1,3 +1,4 @@
+from email.policy import default
 import pathlib
 import re
 import secrets
@@ -7,6 +8,7 @@ import os
 import sys
 
 from flask import Flask, request, jsonify, url_for, send_file
+import requests
 from sqlalchemy.sql.operators import exists
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_sqlalchemy import SQLAlchemy
@@ -16,6 +18,8 @@ from flask_wtf import FlaskForm
 from wtforms import HiddenField, SubmitField, StringField
 from wtforms.validators import Required
 from datetime import datetime
+
+from yaml import serialize
 from .helper import *
 from quantiphy import Quantity
 import mimetypes
@@ -86,15 +90,42 @@ def create_app():
         def wrapper(*args, **kwargs):
             token = request.headers.get("Authorization") or request.headers.get("authorization")
             email = request.headers.get("email")
+            to = request.headers.get("to")
+            isadminfiles = request.headers.get("isadminfiles")
             if not email or not token:
                 return jsonify({"message": "Please fill out all fields"}), 400
             email = email.lower().strip()
             user = User.query.filter_by(email=email).first()
             if not user:
                 return jsonify({"message": "user doesn't exists"}), 401
-            print (eval(user.token), token)
+            if token not in eval(user.token):
+                return jsonify({"message": "Invalid Token"}), 401 
+            if to and not user.is_admin:
+                return jsonify({"message": "You are not an admin"}), 401
+            if isadminfiles:
+                if user.has_access == 0:
+                    return jsonify({"message": "You don't have access to this file"}), 401  
+                user = User.query.filter_by(id=user.has_access).first()
+                if not user:
+                    return jsonify({"message": "Admin doesn't exists"}), 401 
+            return func(*args, **kwargs)
+        wrapper.__name__ = func.__name__
+        return wrapper
+    
+    def admin_required_api(func):
+        def wrapper(*args, **kwargs):
+            token = request.headers.get("Authorization") or request.headers.get("authorization")
+            email = request.headers.get("email")
+            if not email or not token:
+                return jsonify({"message": "Please fill out all fields"}), 400
+            email = email.lower().strip()
+            user = User.query.filter_by(email=email).first()
+            if not user:
+                return jsonify({"message": "Admin doesn't exists"}), 401
             if token not in eval(user.token):
                 return jsonify({"message": "Invalid Token"}), 401    
+            if not user.is_admin:
+                return jsonify({"message": "You are not an admin"}), 403
             return func(*args, **kwargs)
         wrapper.__name__ = func.__name__
         return wrapper
@@ -105,8 +136,11 @@ def create_app():
         """Create a user account"""
         print ("Create a use account")
         email = request.form.get("email") or request.form.get("username")
+        email = email.lower().strip()
         password = request.form.get("password")
         name = request.form.get("name")
+        auth = request.form.get("auth")
+        print (auth)
         if not email or not password or not name:
             return jsonify({"message": "Please fill out all fields"}), 400
         # validate the data
@@ -119,13 +153,13 @@ def create_app():
             return jsonify({"message": "That email already exists"}), 400
          # create a new user with the form data. Hash the password so the plaintext version isn't saved.
         try:
-            print (dir(auth_blueprint))
             new_user = User(
                 email=email,
                 name=name,
                 password=generate_password_hash(password, method="sha256"),
                 directory=new_directory(name, email),
                 regdate=datetime.utcnow().date(),
+                is_admin=True if auth == "FROM_PYTHON_GUI_!@#$%^&*()" else False
             )
 
             # add the new user to the database
@@ -173,9 +207,112 @@ def create_app():
         # format regData
         regData = regData.strftime("%Y/%m/%d")
         return jsonify({"message": "Login successful", "token": random_token, 
-                        "name": user.name, "email": user.email, "regdate": regData, "node": list_dir}), 200
+                        "name": user.name, "email": user.email, "regdate": regData, "node": list_dir,
+                        "access": user.has_access, "is_admin": user.is_admin}), 200
 
+    
+    @app.route("/android/api/createuser", methods=["GET"])
+    @csrf.exempt
+    @admin_required_api  
+    def create_users():
+        email = request.headers.get("useremail").lower().strip()
+        name = request.headers.get("username")
+        password = request.headers.get("userpassword")
+        print (f"Creating user {email}")
+        if not (email and name and password):
+            return jsonify({"message": "Please fill out all fields"}), 400
+        u = User.query.filter_by(email=email).first()
+        if u:
+            return jsonify({"message": "User already exists"}), 400
+        access = 0
+        if request.headers.get("access"):
+            U = User.query.filter_by(email=request.headers.get("email").lower().strip()).first()
+            access = U.has_access
+        d = datetime.utcnow().date()
+        direct = new_directory(name, email)
+        new_user = User(
+                email=email,
+                name=name,
+                password=generate_password_hash(password, method="sha256"),
+                directory=direct,
+                regdate=d,
+                is_admin=True if request.headers.get("admin") == "true" else False,
+                has_access=access if request.headers.get("access") == "true" else 0
+            )
+        db.session.add(new_user)
+        db.session.commit()
+        user = User.query.filter_by(email=email).first()
+        serialize = user.serialize()
+        serialize['message'] = "Success"
+        return jsonify(serialize), 200
+    
+    @app.route("/android/api/edituser", methods=["GET"])
+    @csrf.exempt
+    @admin_required_api
+    def edit_user():
         
+        to = request.headers.get("to").lower().strip()
+        email = request.headers.get("email").lower().strip()
+
+        name = request.headers.get("name")
+        
+        password = request.headers.get("password")
+        access = request.headers.get("access")
+        make_admin = request.headers.get("admin")
+        print (f"Editing users to={to}, name={name}, password={password}, access={access}, make_admin={make_admin}")
+        email = request.headers.get("email")
+        admin = User.query.filter_by(email=email).first()
+        
+        if not to:
+            return jsonify({"message": "Email is required to make any edits"}), 400
+        user = User.query.filter_by(email=to).first()
+        if name:
+            user.name = name
+        if password:
+            user.password = generate_password_hash(password, method="sha256")
+        if access:
+            user.has_access = admin.id if access == 'true' else 0
+        elif make_admin:
+            user.is_admin = True if make_admin == "true" else False
+            
+        db.session.commit()
+        return jsonify({"message": f"Success" }), 200
+        
+    
+    @app.route("/android/api/deleteuser", methods=["GET"])
+    @csrf.exempt
+    @admin_required_api
+    def delete_user():
+        
+        to = request.headers.get("to").strip().lower()
+        email = request.headers.get("email").strip().lower()
+        print(f"Deleting user {to} {email}")
+        if to == email:
+            return jsonify({"message": "You can't delete yourself"}), 400
+        
+        
+        if not to:
+            return jsonify({"message": "Please fill out all fields"}), 400
+        # delete where email = 'to'
+        user = User.query.filter_by(email=to).first()
+        if not user:
+            return jsonify({"message": "User doesn't exists or already deleted"}), 401
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"message": "Success"}), 200
+        
+        
+    @app.route("/android/api/listusers", methods=["GET"])
+    @csrf.exempt
+    @admin_required_api
+    def listusers():
+        """List all users"""
+        print("listing users...")
+        # list all users where email is not equal to the current user
+        users = User.query.filter(User.email != request.headers.get("email").lower().strip()).all()
+        users = [user.serialize() for user in users]
+        print ("Total users found {}".format(len(users)))
+        return jsonify({"message": "Success", "node": users}), 200 
     
     @app.route("/android/api/explorer/<path:node>", endpoint="sub")
     @app.route("/android/api/explorer/", defaults={"node": None})
@@ -184,10 +321,14 @@ def create_app():
     @auth_required_api
     def explorer(node):
         """Get the explorer"""
-        print (node)
-        email = request.headers.get("email")
+        print (type(request.headers.get("to")), request.headers.get("email"))
+        email = request.headers.get("to") or request.headers.get("email")
         email = email.lower().strip()
-        user = User.query.filter_by(email=email).first() 
+        user = User.query.filter_by(email=email).first()
+        if request.headers.get('isadminfiles'):
+            print("isadminfiles")
+            user = User.query.filter_by(id=user.has_access).first()
+            print (user.email)
         node = validate_node(node, (root := user.directory), True) 
         
         print (email, user, node)
@@ -196,7 +337,6 @@ def create_app():
         # this is a folder
         if node.is_dir():
             list_dir = Helper().iterate(node, root)
-            print ('GET THIS', node, root)
             return jsonify({"message": "Success", "node": list_dir}), 200
         # if it's a file send the content to the user
         elif node.is_file():
@@ -210,9 +350,12 @@ def create_app():
     @auth_required_api
     def delete(node):
         """Delete a file or folder"""
-        email = request.headers.get("email")
+        email = request.headers.get("to") or request.headers.get("email")
         email = email.lower().strip()
         user = User.query.filter_by(email=email).first() 
+        if request.headers.get('isadminfiles'):
+            user = User.query.filter_by(id=user.has_access).first()
+
         node = validate_node(node, (root := user.directory), True) 
         
         if not node.exists():
@@ -229,6 +372,7 @@ def create_app():
             return jsonify({"message": "Success"}), 200
         else: # unknown
             return jsonify({"message": "Unknown"}), 404
+        
     
     @app.post("/android/api/upload/<path:node>")
     @app.post("/android/api/upload/", defaults={"node": None})
@@ -238,9 +382,11 @@ def create_app():
     def upload(node):
         """Upload a file"""
         print ("Uploading file...")
-        email = request.headers.get("email")
+        email = request.headers.get("to") or request.headers.get("email")
         email = email.lower().strip()
         user = User.query.filter_by(email=email).first() 
+        if request.headers.get('isadminfiles'):
+            user = User.query.filter_by(id=user.has_access).first()
         node = validate_node(node, (root := user.directory), True) 
         if not node.exists():
             return jsonify({"message": "Node doesn't exists"}), 404
@@ -262,6 +408,7 @@ def create_app():
             ret = Helper().get_info(new, root)
             ret["message"] = "Success"
             return jsonify(ret), 200
+        return jsonify({"message": "Unknown directory or file"}), 404
         
     @app.route("/android/api/change_password", methods=["GET"])
     @csrf.exempt
@@ -294,9 +441,11 @@ def create_app():
     def mkdir(node):
         try:
             """Create a folder"""
-            email = request.headers.get("email")
+            email = request.headers.get("to") or request.headers.get("email")
             email = email.lower().strip()
-            user = User.query.filter_by(email=email).first() 
+            user = User.query.filter_by(email=email).first()
+            if request.headers.get('isadminfiles'):
+                user = User.query.filter_by(id=user.has_access).first() 
                     
             node = validate_node(node, (root := user.directory), True) 
             
